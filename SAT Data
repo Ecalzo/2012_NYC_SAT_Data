@@ -12,28 +12,29 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import matplotlib.patches as mpatches
 import seaborn as sns
+from scipy import stats
 
 font = {'family' : 'Arial',
         'weight' : 'bold'}
+#matplotlib.rc('font', **font)
 plt.rc('font', size=15, **font)
 
 # read the csv
-df = pd.read_csv('2012_SAT_Results.csv')
+df = pd.read_csv('CSVs/2012_SAT_Results.csv')
 
 # remove some rows that have 's' instead of a number
 df = df[~df['SAT Math Avg. Score'].str.contains('s')]
 
 # After removing all 's' occurences, make columns numeric datatype for plotting
-# this may be done with a for loop
-df['SAT Math Avg. Score'] = pd.to_numeric(df['SAT Math Avg. Score'])
-df['SAT Critical Reading Avg. Score'] = pd.to_numeric(df['SAT Critical Reading Avg. Score'])
-df['SAT Writing Avg. Score'] = pd.to_numeric(df['SAT Writing Avg. Score']) 
-df['Num of SAT Test Takers'] = pd.to_numeric(df['Num of SAT Test Takers'])
+numeric_cols = ['SAT Math Avg. Score', 'SAT Critical Reading Avg. Score', 'SAT Writing Avg. Score', 'Num of SAT Test Takers']
+
+for col in numeric_cols:
+    df[col] = pd.to_numeric(df[col])
 
 # set the x and y values we will be plotting based on the shared df column names
 x = 'SAT Critical Reading Avg. Score'
 y = 'SAT Math Avg. Score'
-#s = df['Num of SAT Test Takers']/2 #df['SAT Math Avg. Score']/3
+alpha = 0.7
 
 # Create the color map based on the unique boro names using seaborn presets
 color_labels = df['boro'].unique()
@@ -44,17 +45,40 @@ color_map = dict(zip(color_labels, rgb_values))
 fig, axes = plt.subplots(nrows=2, ncols=1)
 
 # Plot the first dataframe
-ax1 = df.plot.scatter(ax=axes[0], x=x, y=y, s=df['Num of SAT Test Takers']/2, c=df['boro'].map(color_map), marker='.', figsize=(13,5))
+ax1 = df.plot.scatter(ax=axes[0], x=x, y=y, s=df['Num of SAT Test Takers'], c=df['boro'].map(color_map), marker='.', alpha=alpha, figsize=(13,5))
 
 # Draw a rectanlge to highlight the data shown in the next plot
-rect = plt.Rectangle((350, 300), 100, 300, fill=False)
+rect = plt.Rectangle((350, 300), 100, 300, fill=False, alpha=0.4)
 ax1.add_patch(rect)
 
-# Create a new df with constraints on the x axis
-df_middle = df[(df[x] <450) & (df[x] > 350)]
+# Create a new df with constraints on the x axis - copying original df to create independant df
+df_middle = df.copy()
+df_middle = df_middle.loc[(df[x] <450) & (df[x] > 350)]
 
 # Plot the new df
-ax2 = df_middle.plot(ax=axes[1],x=x,y=y,kind='scatter', s=df_middle['Num of SAT Test Takers'], c=df_middle['boro'].map(color_map), marker='.', figsize=(10,10))
+ax2 = df_middle.plot(ax=axes[1],x=x,y=y,kind='scatter', s=df_middle['Num of SAT Test Takers'], c=df_middle['boro'].map(color_map), marker='.', alpha=alpha, figsize=(10,10))
+
+'''
+Some stats practice
+Line of best fit - least squares regression
+'''
+n = df['boro'].count()
+df_xy = df[x]*df[y]
+df_x2 = df[x]**2
+m = (n*df_xy.sum()-(df[x].sum())*(df[y].sum()))/((n*df_x2.sum())-((df[x].sum())**2))
+b = (df[y].sum()-m*df[x].sum())/n
+df['fx'] = m*df[x]+b
+df.plot(x=x,y='fx',ax=axes[0], kind='line', style=[':'], alpha=0.3)
+
+# we can also use the stats linregress function and get more data than we need!
+
+m2, b2, r, p, se = stats.linregress(df_middle[x],df_middle[y])
+df_middle['fx2']=m2*df_middle[x]+b2
+df_middle.plot(x=x, y='fx2', ax=axes[1], kind='line', style=[':'], alpha=0.3, legend=False)
+
+'''
+end of stats practice
+'''
 
 # Create a custom legend
 legend_elements = [Line2D([0], [0], marker='o', color='w', markerfacecolor=color_map['Bronx'], label='Bronx', markersize=10),
@@ -62,18 +86,35 @@ legend_elements = [Line2D([0], [0], marker='o', color='w', markerfacecolor=color
                 Line2D([0], [0], marker='o', color='w', markerfacecolor=color_map['Manhattan'], label='Manhattan', markersize=10),
                 Line2D([0], [0], marker='o', color='w', markerfacecolor=color_map['Queens'], label='Queens', markersize=10),
                 Line2D([0], [0], marker='o', color='w', markerfacecolor=color_map['Staten Island'], label='Staten Island', markersize=10),
-                Line2D([0], [0], marker='o', color='w', markerfacecolor='black', label='Size = # of test takers', markersize=10)
-                       
-                ]        
+                Line2D([0], [0], marker='o', color='w', markerfacecolor='black', label='Size = # of test takers', markersize=10)                  
+                ]
+'''
+Use for size legend if desired        
+#msize = df['Num of SAT Test Takers'].min()
+#size_elements = [Line2D([0],[0], marker='o', color='w', markerfacecolor=color_map['Manhattan'], markersize=msize)  ]
+'''
 
 # Initialize the legend                 
 ax1.legend(handles=legend_elements, loc='best', prop={'size': 12})
+#ax2.legend(handles=size_elements)
 
 # Set face color to make the colors pop
 ax1.set_facecolor('#e5e6e8')
 ax2.set_facecolor('#e5e6e8')     
                   
 # Add title
-plt.suptitle('2012 SAT Scores in NYC Schools', size=20, **font)
+plt.suptitle('2012 SAT Scores in NYC Schools', size=20, y=0.94, **font)
 
+# Adjust whitestpace between subplots
+plt.subplots_adjust(hspace=0.23)
+
+'''
+Interesting things 
+
+#df.plot(y='Num of SAT Test Takers', kind='box', figsize=(10,10))
+df.groupby(['boro'])[['SCHOOL NAME','SAT Math Avg. Score']].max()
+
+'''
+
+#plt.savefig('SAT_NYC.png', dpi=800, bbox_inches='tight')
 plt.show()
